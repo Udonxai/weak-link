@@ -29,7 +29,7 @@ If the user chooses "Continue without account" or completes signup, they are tak
 - A random UUID is generated as the user ID
 - User is authenticated anonymously using Supabase's `signInAnonymously()`
 - Profile data is stored in Supabase: `{ id, real_name, profile_name, profile_pic_url, created_at }`
-- The `username` field is kept in sync with `profile_name` for backward compatibility
+- The `username` field has been removed in favor of `profile_name`
 
 ### 4. After Setup
 - User is directed to the main app (tabs)
@@ -44,7 +44,7 @@ The `users` table has been updated with new columns:
 - `real_name` (text, nullable) - User's real name
 - `profile_name` (text, required) - Display name for the app
 - `profile_pic_url` (text, nullable) - Reference to preset avatar
-- `username` (text, nullable) - Kept for backward compatibility
+- `username` field has been removed
 
 ## Profile Picture Presets
 

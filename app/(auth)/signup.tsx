@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { router } from 'expo-router';
 
 export default function SignupScreen() {
-  const [username, setUsername] = useState('');
+  const [profileName, setProfileName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -12,7 +12,7 @@ export default function SignupScreen() {
   const { signUp } = useAuth();
 
   const handleSignup = async () => {
-    if (!username || !email || !password) {
+    if (!profileName || !email || !password) {
       setError('Please fill in all fields');
       return;
     }
@@ -25,7 +25,7 @@ export default function SignupScreen() {
     setLoading(true);
     setError('');
 
-    const { error } = await signUp(email, password, username);
+    const { error } = await signUp(email, password, profileName);
 
     if (error) {
       setError(error.message);
@@ -49,10 +49,10 @@ export default function SignupScreen() {
 
         <TextInput
           style={styles.input}
-          placeholder="Username"
+          placeholder="Display Name"
           placeholderTextColor="#999"
-          value={username}
-          onChangeText={setUsername}
+          value={profileName}
+          onChangeText={setProfileName}
           autoCapitalize="none"
           editable={!loading}
         />

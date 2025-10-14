@@ -26,6 +26,9 @@ export default function GroupsScreen() {
   useEffect(() => {
     if (user) {
       loadGroups();
+    } else {
+      // If no user, stop loading
+      setLoading(false);
     }
   }, [user]);
 

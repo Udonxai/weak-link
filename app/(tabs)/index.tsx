@@ -25,6 +25,9 @@ export default function HomeScreen() {
   useEffect(() => {
     if (user) {
       loadData();
+    } else {
+      // If no user, stop loading
+      setLoading(false);
     }
   }, [user]);
 

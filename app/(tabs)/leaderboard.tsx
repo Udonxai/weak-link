@@ -6,7 +6,7 @@ import { Trophy, TrendingUp, Calendar } from 'lucide-react-native';
 
 interface LeaderboardEntry {
   user_id: string;
-  username: string;
+  profile_name: string;
   breaks: number;
   isCurrentUser: boolean;
 }
@@ -27,6 +27,9 @@ export default function LeaderboardScreen() {
   useEffect(() => {
     if (user) {
       loadGroups();
+    } else {
+      // If no user, stop loading
+      setLoading(false);
     }
   }, [user]);
 
@@ -79,7 +82,7 @@ export default function LeaderboardScreen() {
       .select(`
         user_id,
         users (
-          username
+          profile_name
         )
       `)
       .eq('group_id', selectedGroup);
@@ -96,7 +99,7 @@ export default function LeaderboardScreen() {
       const breaks = events?.filter(e => e.user_id === member.user_id).length || 0;
       return {
         user_id: member.user_id,
-        username: member.users.username,
+        profile_name: member.users.profile_name,
         breaks,
         isCurrentUser: member.user_id === user.id,
       };
@@ -187,7 +190,7 @@ export default function LeaderboardScreen() {
             </View>
             <View style={styles.entryInfo}>
               <Text style={[styles.entryUsername, entry.isCurrentUser && styles.entryUsernameHighlight]}>
-                {entry.username}
+                {entry.profile_name}
                 {entry.isCurrentUser ? ' (You)' : ''}
               </Text>
               <Text style={styles.entryBreaks}>

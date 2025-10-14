@@ -43,15 +43,15 @@ export function useRealtimeEvents(config: UseRealtimeEventsConfig) {
           if (event.user_id !== config.userId) {
             const { data: userData } = await supabase
               .from('users')
-              .select('username')
+              .select('profile_name')
               .eq('id', event.user_id)
               .maybeSingle();
 
-            const username = userData?.username || 'Someone';
+            const profileName = userData?.profile_name || 'Someone';
 
             await sendLocalNotification(
               'Weak Link Alert',
-              `${username} opened ${event.app_name}`
+              `${profileName} opened ${event.app_name}`
             );
           }
         }

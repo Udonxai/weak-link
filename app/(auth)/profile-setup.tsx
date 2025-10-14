@@ -20,7 +20,7 @@ export default function ProfileSetupScreen() {
   const [selectedPicture, setSelectedPicture] = useState<ProfilePicturePreset | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { session, createAutomaticAccount, createProfile } = useAuth();
+  const { user, createAutomaticAccount, createProfile } = useAuth();
 
   const handleContinue = async () => {
     if (!profileName.trim()) {
@@ -36,18 +36,28 @@ export default function ProfileSetupScreen() {
     setLoading(true);
     setError('');
 
+    // Add a timeout to prevent infinite loading
+    const timeoutId = setTimeout(() => {
+      setError('Request timed out. Please try again.');
+      setLoading(false);
+    }, 30000); // 30 second timeout
+
     try {
-      // If no session exists, create an account automatically
-      if (!session) {
+      // If no user exists, create an account automatically
+      if (!user) {
+        console.log('Creating automatic account...');
         const { error: authError } = await createAutomaticAccount();
         if (authError) {
+          console.error('Account creation error:', authError);
           setError('Failed to create account. Please try again.');
           setLoading(false);
           return;
         }
+        console.log('Account created successfully');
       }
 
       // Then create/update the profile
+      console.log('Creating profile...');
       const { error: profileError } = await createProfile({
         real_name: realName.trim() || undefined,
         profile_name: profileName.trim(),
@@ -55,14 +65,19 @@ export default function ProfileSetupScreen() {
       });
 
       if (profileError) {
+        console.error('Profile creation error:', profileError);
         setError(profileError.message);
         setLoading(false);
         return;
       }
 
-      // Navigate to main app
+      console.log('Profile created successfully, navigating...');
+      // Clear timeout and navigate to main app
+      clearTimeout(timeoutId);
       router.replace('/(tabs)');
     } catch (err) {
+      console.error('Unexpected error:', err);
+      clearTimeout(timeoutId);
       setError('Something went wrong. Please try again.');
       setLoading(false);
     }
@@ -102,7 +117,7 @@ export default function ProfileSetupScreen() {
         <View style={styles.content}>
           <Text style={styles.title}>Set Up Your Profile</Text>
           <Text style={styles.subtitle}>
-            {session ? 'Complete your profile to get started' : 'Tell us a bit about yourself to get started'}
+            {user ? 'Complete your profile to get started' : 'Tell us a bit about yourself to get started'}
           </Text>
 
           {error ? <Text style={styles.error}>{error}</Text> : null}

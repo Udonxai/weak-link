@@ -4,20 +4,20 @@ import { useAuth } from '@/contexts/AuthContext';
 import { router } from 'expo-router';
 
 export default function IndexScreen() {
-  const { session, userProfile, loading, createAutomaticAccount } = useAuth();
+  const { user, userProfile, loading, createAutomaticAccount } = useAuth();
 
   useEffect(() => {
     if (!loading) {
-      if (session) {
+      if (user) {
         // Check if user has completed profile setup
         if (userProfile && userProfile.profile_name && userProfile.profile_pic_url) {
           router.replace('/(tabs)');
         } else {
-          // User is authenticated but hasn't completed profile setup
+          // User exists but hasn't completed profile setup
           router.replace('/(auth)/profile-setup');
         }
       } else {
-        // No session, automatically create account and go to profile setup
+        // No user, automatically create account and go to profile setup
         const autoCreateAccount = async () => {
           const { error } = await createAutomaticAccount();
           if (!error) {
@@ -30,7 +30,7 @@ export default function IndexScreen() {
         autoCreateAccount();
       }
     }
-  }, [loading, session, userProfile]);
+  }, [loading, user, userProfile]);
 
   return (
     <View style={styles.container}>

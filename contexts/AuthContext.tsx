@@ -10,7 +10,7 @@ interface AuthContextType {
   user: User | null;
   userProfile: UserProfile | null;
   loading: boolean;
-  signUp: (email: string, password: string, username: string) => Promise<{ error: any }>;
+  signUp: (email: string, password: string, profileName: string) => Promise<{ error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signInAnonymously: () => Promise<{ error: any }>;
   createAutomaticAccount: () => Promise<{ error: any }>;
@@ -28,6 +28,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Function to fetch user profile
@@ -49,9 +50,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     // For now, we'll skip the session check since we're using integer IDs
     setLoading(false);
-  }, []);
+    
+    // If we have a currentUserId, fetch the user profile
+    if (currentUserId) {
+      fetchUserProfile(currentUserId).then((profile) => {
+        setUserProfile(profile);
+      });
+    }
+  }, [currentUserId]);
 
-  const signUp = async (email: string, password: string, username: string) => {
+  const signUp = async (email: string, password: string, profileName: string) => {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -64,11 +72,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .from('users')
         .insert({
           id: data.user.id,
-          username,
-          profile_name: username,
+          profile_name: profileName,
         });
 
       if (profileError) return { error: profileError };
+
+      // Set the current user ID
+      setCurrentUserId(data.user.id);
     }
 
     return { error: null };
@@ -88,18 +98,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Generate a random integer ID
       const randomId = Math.floor(Math.random() * 1000000000);
       
-      // Create a basic user profile directly
+      // Create a basic user profile with required fields
       const { error: profileError } = await supabase
         .from('users')
         .insert({
           id: randomId,
-          profile_name: `User_${randomId}`,
+          profile_name: `User_${randomId}`, // Ensure this is always set
+          real_name: null,
+          profile_pic_url: null,
         });
 
-      if (profileError) return { error: profileError };
+      if (profileError) {
+        console.error('Error creating user profile:', profileError);
+        return { error: profileError };
+      }
+
+      // Set the current user ID
+      setCurrentUserId(randomId);
 
       return { error: null };
     } catch (err) {
+      console.error('Error in signInAnonymously:', err);
       return { error: { message: 'Failed to create account' } };
     }
   };
@@ -114,16 +133,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     profile_name: string;
     profile_pic_url?: string;
   }) => {
-    // Get the latest user ID from the users table
-    const { data: latestUser, error: fetchError } = await supabase
-      .from('users')
-      .select('id')
-      .order('id', { ascending: false })
-      .limit(1)
-      .single();
-
-    if (fetchError || !latestUser) {
-      return { error: { message: 'No user found' } };
+    // Use the current user ID
+    if (!currentUserId) {
+      return { error: { message: 'No current user found' } };
     }
 
     const { error } = await supabase
@@ -132,14 +144,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         real_name: profileData.real_name,
         profile_name: profileData.profile_name,
         profile_pic_url: profileData.profile_pic_url,
-        username: profileData.profile_name, // Keep username in sync
       })
-      .eq('id', latestUser.id);
+      .eq('id', currentUserId);
 
-    if (error) return { error };
+    if (error) {
+      console.error('Error updating profile:', error);
+      return { error };
+    }
 
     // Refresh user profile
-    const updatedProfile = await fetchUserProfile(latestUser.id);
+    const updatedProfile = await fetchUserProfile(currentUserId);
     setUserProfile(updatedProfile);
 
     return { error: null };
@@ -149,11 +163,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await supabase.auth.signOut();
   };
 
+  // Create a mock user object when we have a currentUserId
+  const mockUser = currentUserId ? { id: currentUserId } : null;
+
   return (
     <AuthContext.Provider
       value={{
         session,
-        user,
+        user: mockUser,
         userProfile,
         loading,
         signUp,
