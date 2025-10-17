@@ -19,11 +19,6 @@ BEGIN
     NEW.profile_name := 'User_' || substring(NEW.id::text from 1 for 8);
   END IF;
   
-  -- If username is null, use profile_name
-  IF NEW.username IS NULL THEN
-    NEW.username := NEW.profile_name;
-  END IF;
-  
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;

@@ -13,7 +13,6 @@ interface AuthContextType {
   signUp: (email: string, password: string, profileName: string) => Promise<{ error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signInAnonymously: () => Promise<{ error: any }>;
-  createAutomaticAccount: () => Promise<{ error: any }>;
   createProfile: (profileData: {
     real_name?: string;
     profile_name: string;
@@ -63,34 +62,62 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
+      options: {
+        emailRedirectTo: undefined, // Disable email confirmation
+      },
     });
 
     if (error) return { error };
 
     if (data.user) {
+      // Generate a random integer ID for our custom users table
+      const randomId = Math.floor(Math.random() * 1000000000);
+      
       const { error: profileError } = await supabase
         .from('users')
         .insert({
-          id: data.user.id,
+          id: randomId,
+          email: email,
+          password: password, // Note: In production, this should be hashed
           profile_name: profileName,
         });
 
       if (profileError) return { error: profileError };
 
       // Set the current user ID
-      setCurrentUserId(data.user.id);
+      setCurrentUserId(randomId);
     }
 
     return { error: null };
   };
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
-    return { error };
+    if (error) return { error };
+
+    if (data.user) {
+      // Look up the user in our custom users table by email
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', email)
+        .single();
+
+      if (userError) {
+        console.error('Error fetching user profile:', userError);
+        return { error: userError };
+      }
+
+      // Set the current user ID from our custom users table
+      setCurrentUserId(userData.id);
+      setUserProfile(userData);
+    }
+
+    return { error: null };
   };
 
   const signInAnonymously = async () => {
@@ -103,6 +130,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .from('users')
         .insert({
           id: randomId,
+          email: `anonymous_${randomId}@weaklink.app`, // Generate anonymous email
+          password: '', // Empty password for anonymous users
           profile_name: `User_${randomId}`, // Ensure this is always set
           real_name: null,
           profile_pic_url: null,
@@ -123,10 +152,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // New method to automatically create an account
-  const createAutomaticAccount = async () => {
-    return await signInAnonymously();
-  };
 
   const createProfile = async (profileData: {
     real_name?: string;
@@ -176,7 +201,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signUp,
         signIn,
         signInAnonymously,
-        createAutomaticAccount,
         createProfile,
         signOut,
       }}

@@ -5,6 +5,8 @@ export interface Database {
       users: {
         Row: {
           id: number;
+          email: string;
+          password: string;
           profile_name: string;
           real_name: string | null;
           profile_pic_url: string | null;
@@ -12,6 +14,8 @@ export interface Database {
         };
         Insert: {
           id?: number;
+          email: string;
+          password: string;
           profile_name: string;
           real_name?: string | null;
           profile_pic_url?: string | null;
@@ -19,6 +23,8 @@ export interface Database {
         };
         Update: {
           id?: number;
+          email?: string;
+          password?: string;
           profile_name?: string;
           real_name?: string | null;
           profile_pic_url?: string | null;

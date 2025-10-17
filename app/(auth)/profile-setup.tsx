@@ -20,7 +20,7 @@ export default function ProfileSetupScreen() {
   const [selectedPicture, setSelectedPicture] = useState<ProfilePicturePreset | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { user, createAutomaticAccount, createProfile } = useAuth();
+  const { user, createProfile } = useAuth();
 
   const handleContinue = async () => {
     if (!profileName.trim()) {
@@ -43,20 +43,14 @@ export default function ProfileSetupScreen() {
     }, 30000); // 30 second timeout
 
     try {
-      // If no user exists, create an account automatically
+      // User should already exist from signup/login
       if (!user) {
-        console.log('Creating automatic account...');
-        const { error: authError } = await createAutomaticAccount();
-        if (authError) {
-          console.error('Account creation error:', authError);
-          setError('Failed to create account. Please try again.');
-          setLoading(false);
-          return;
-        }
-        console.log('Account created successfully');
+        setError('No user found. Please sign up or log in first.');
+        setLoading(false);
+        return;
       }
 
-      // Then create/update the profile
+      // Create/update the profile
       console.log('Creating profile...');
       const { error: profileError } = await createProfile({
         real_name: realName.trim() || undefined,
@@ -83,30 +77,6 @@ export default function ProfileSetupScreen() {
     }
   };
 
-  const handleSkip = async () => {
-    Alert.alert(
-      'Skip Profile Setup',
-      'You can set up your profile later in settings. Continue with a basic profile?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Continue',
-          onPress: async () => {
-            setLoading(true);
-            if (!session) {
-              const { error: authError } = await createAutomaticAccount();
-              if (authError) {
-                setError(authError.message);
-                setLoading(false);
-                return;
-              }
-            }
-            router.replace('/(tabs)');
-          },
-        },
-      ]
-    );
-  };
 
   return (
     <KeyboardAvoidingView
@@ -192,13 +162,6 @@ export default function ProfileSetupScreen() {
             </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            onPress={handleSkip}
-            disabled={loading}
-            style={styles.skipButton}
-          >
-            <Text style={styles.skipText}>Skip for now</Text>
-          </TouchableOpacity>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -294,14 +257,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
-  },
-  skipButton: {
-    alignItems: 'center',
-    marginTop: 16,
-  },
-  skipText: {
-    color: '#666',
-    fontSize: 14,
   },
   error: {
     color: '#ff4444',

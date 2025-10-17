@@ -78,21 +78,52 @@ export default function GroupsScreen() {
     setCreating(true);
     setError('');
 
-    const { error: createError } = await supabase
-      .from('groups')
-      .insert({
-        name: newGroupName,
-        created_by: user.id,
-      });
+    try {
+      const { data, error: createError } = await supabase
+        .from('groups')
+        .insert({
+          name: newGroupName,
+          created_by: user.id,
+        })
+        .select()
+        .single();
 
-    if (createError) {
-      setError(createError.message);
+      if (createError) {
+        console.error('Group creation error:', createError);
+        setError(createError.message);
+        setCreating(false);
+        return;
+      }
+
+      console.log('Group created successfully:', data);
+    
+    // Add creator as a member of the new group
+    const { error: memberInsertError } = await supabase
+      .from('group_members')
+      .insert({
+        user_id: user.id,
+        group_id: data.id,
+      });
+    
+    if (memberInsertError) {
+      console.error('Failed to add creator to group_members:', memberInsertError);
+      setError(memberInsertError.message);
       setCreating(false);
-    } else {
+      return;
+    }
+      
+      // Clear form and close modal
       setNewGroupName('');
       setShowCreateModal(false);
       setCreating(false);
-      loadGroups();
+      
+      // Reload groups to show the new group
+      await loadGroups();
+      
+    } catch (err) {
+      console.error('Unexpected error creating group:', err);
+      setError('Failed to create group. Please try again.');
+      setCreating(false);
     }
   };
 

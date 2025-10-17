@@ -9,6 +9,8 @@ interface LeaderboardEntry {
   profile_name: string;
   breaks: number;
   isCurrentUser: boolean;
+  group_id: string;
+  group_name: string;
 }
 
 interface Group {
@@ -19,7 +21,6 @@ interface Group {
 export default function LeaderboardScreen() {
   const { user } = useAuth();
   const [groups, setGroups] = useState<Group[]>([]);
-  const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [period, setPeriod] = useState<'today' | 'week'>('today');
   const [loading, setLoading] = useState(true);
@@ -34,10 +35,10 @@ export default function LeaderboardScreen() {
   }, [user]);
 
   useEffect(() => {
-    if (selectedGroup) {
+    if (groups.length > 0) {
       loadLeaderboard();
     }
-  }, [selectedGroup, period]);
+  }, [groups, period]);
 
   const loadGroups = async () => {
     if (!user) return;
@@ -59,14 +60,13 @@ export default function LeaderboardScreen() {
         name: gm.groups.name,
       }));
       setGroups(groupList);
-      setSelectedGroup(groupList[0].id);
     }
 
     setLoading(false);
   };
 
   const loadLeaderboard = async () => {
-    if (!selectedGroup || !user) return;
+    if (!user) return;
 
     const now = new Date();
     let startDate: Date;
@@ -77,31 +77,39 @@ export default function LeaderboardScreen() {
       startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     }
 
+    // Get all members from all groups the user is part of
     const { data: members } = await supabase
       .from('group_members')
       .select(`
         user_id,
+        group_id,
         users (
           profile_name
+        ),
+        groups (
+          name
         )
       `)
-      .eq('group_id', selectedGroup);
+      .in('group_id', groups.map(g => g.id));
 
     if (!members) return;
 
+    // Get all events from all groups the user is part of
     const { data: events } = await supabase
       .from('events')
-      .select('user_id')
-      .eq('group_id', selectedGroup)
+      .select('user_id, group_id')
+      .in('group_id', groups.map(g => g.id))
       .gte('timestamp', startDate.toISOString());
 
     const leaderboardData: LeaderboardEntry[] = members.map((member: any) => {
-      const breaks = events?.filter(e => e.user_id === member.user_id).length || 0;
+      const breaks = events?.filter(e => e.user_id === member.user_id && e.group_id === member.group_id).length || 0;
       return {
         user_id: member.user_id,
         profile_name: member.users.profile_name,
         breaks,
         isCurrentUser: member.user_id === user.id,
+        group_id: member.group_id,
+        group_name: member.groups.name,
       };
     });
 
@@ -149,27 +157,6 @@ export default function LeaderboardScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.groupSelector}>
-        {groups.map((group) => (
-          <TouchableOpacity
-            key={group.id}
-            style={[
-              styles.groupChip,
-              selectedGroup === group.id && styles.groupChipActive,
-            ]}
-            onPress={() => setSelectedGroup(group.id)}
-          >
-            <Text
-              style={[
-                styles.groupChipText,
-                selectedGroup === group.id && styles.groupChipTextActive,
-              ]}
-            >
-              {group.name}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
 
       <ScrollView style={styles.leaderboardContainer}>
         {leaderboard.map((entry, index) => (
@@ -192,6 +179,9 @@ export default function LeaderboardScreen() {
               <Text style={[styles.entryUsername, entry.isCurrentUser && styles.entryUsernameHighlight]}>
                 {entry.profile_name}
                 {entry.isCurrentUser ? ' (You)' : ''}
+              </Text>
+              <Text style={styles.entryGroup}>
+                {entry.group_name}
               </Text>
               <Text style={styles.entryBreaks}>
                 {entry.breaks} {entry.breaks === 1 ? 'break' : 'breaks'}
@@ -275,31 +265,6 @@ const styles = StyleSheet.create({
   periodTextActive: {
     color: '#fff',
   },
-  groupSelector: {
-    paddingHorizontal: 24,
-    marginBottom: 16,
-  },
-  groupChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#1a1a1a',
-    marginRight: 8,
-    borderWidth: 1,
-    borderColor: '#333',
-  },
-  groupChipActive: {
-    backgroundColor: '#007AFF',
-    borderColor: '#007AFF',
-  },
-  groupChipText: {
-    color: '#999',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  groupChipTextActive: {
-    color: '#fff',
-  },
   leaderboardContainer: {
     flex: 1,
     padding: 24,
@@ -342,6 +307,11 @@ const styles = StyleSheet.create({
   },
   entryUsernameHighlight: {
     color: '#007AFF',
+  },
+  entryGroup: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 2,
   },
   entryBreaks: {
     fontSize: 14,

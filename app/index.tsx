@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { router } from 'expo-router';
 
 export default function IndexScreen() {
-  const { user, userProfile, loading, createAutomaticAccount } = useAuth();
+  const { user, userProfile, loading } = useAuth();
 
   useEffect(() => {
     if (!loading) {
@@ -17,17 +17,8 @@ export default function IndexScreen() {
           router.replace('/(auth)/profile-setup');
         }
       } else {
-        // No user, automatically create account and go to profile setup
-        const autoCreateAccount = async () => {
-          const { error } = await createAutomaticAccount();
-          if (!error) {
-            router.replace('/(auth)/profile-setup');
-          } else {
-            // If auto-creation fails, show login screen
-            router.replace('/(auth)/login');
-          }
-        };
-        autoCreateAccount();
+        // No user, show welcome screen to let them choose how to proceed
+        router.replace('/(auth)/welcome');
       }
     }
   }, [loading, user, userProfile]);

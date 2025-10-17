@@ -89,8 +89,17 @@ export default function SignupScreen() {
         <TouchableOpacity
           onPress={() => router.push('/(auth)/login')}
           disabled={loading}
+          style={styles.loginButton}
         >
-          <Text style={styles.link}>Already have an account? Log in</Text>
+          <Text style={styles.loginText}>Already have an account? Log in</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => router.push('/(auth)/welcome')}
+          disabled={loading}
+          style={styles.backButton}
+        >
+          <Text style={styles.backText}>Back to welcome</Text>
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
@@ -145,10 +154,20 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  link: {
-    color: '#007AFF',
-    textAlign: 'center',
+  loginButton: {
+    alignItems: 'center',
     marginTop: 24,
+  },
+  loginText: {
+    color: '#007AFF',
+    fontSize: 16,
+  },
+  backButton: {
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  backText: {
+    color: '#666',
     fontSize: 14,
   },
   error: {
