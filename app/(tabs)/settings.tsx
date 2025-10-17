@@ -1,10 +1,35 @@
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { router } from 'expo-router';
 import { LogOut, User, Bell, Shield } from 'lucide-react-native';
+import { requestPermission as requestScreenTimePermission, checkPermission as checkScreenTimePermission, startMonitoring as startScreenTimeMonitoring } from '@/modules/UsageStats';
 
 export default function SettingsScreen() {
   const { user, signOut } = useAuth();
+
+  const handleIOSPermissions = async () => {
+    if (Platform.OS !== 'ios') {
+      Alert.alert('Permissions', 'iOS Screen Time permissions are only available on iOS devices.');
+      return;
+    }
+
+    try {
+      const hasPermission = await checkScreenTimePermission();
+      if (!hasPermission) {
+        const granted = await requestScreenTimePermission();
+        if (!granted) {
+          Alert.alert('Permission Required', 'Screen Time permission is needed to monitor app usage.');
+          return;
+        }
+      }
+
+      // Try to start monitoring schedule
+      await startScreenTimeMonitoring();
+      Alert.alert('Permissions', 'Screen Time permission granted and monitoring scheduled.');
+    } catch (e) {
+      Alert.alert('Error', 'Failed to configure Screen Time permissions.');
+    }
+  };
 
   const handleSignOut = async () => {
     await signOut();
@@ -36,7 +61,7 @@ export default function SettingsScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>App Monitoring</Text>
 
-          <TouchableOpacity style={styles.settingCard}>
+          <TouchableOpacity style={styles.settingCard} onPress={handleIOSPermissions}>
             <Shield size={20} color="#007AFF" />
             <View style={styles.settingInfo}>
               <Text style={styles.settingText}>Permissions</Text>

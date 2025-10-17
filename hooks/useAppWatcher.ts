@@ -3,10 +3,15 @@ import { Platform, AppState } from 'react-native';
 import { getForegroundApp } from '@/modules/UsageStats';
 import { supabase } from '@/lib/supabase';
 
+interface TrackedAppInfo {
+  app_identifier: string;
+  app_name: string;
+}
+
 interface AppWatcherConfig {
   userId: string;
   groupId: string;
-  trackedApps: string[];
+  trackedApps: TrackedAppInfo[];
   enabled: boolean;
 }
 
@@ -38,17 +43,22 @@ export function useAppWatcher(config: AppWatcherConfig) {
         const app = await getForegroundApp();
         setCurrentApp(app);
 
+        const trackedAppIdentifiers = config.trackedApps.map(t => t.app_identifier);
+        
         if (
-          config.trackedApps.includes(app) &&
+          trackedAppIdentifiers.includes(app) &&
           app !== lastDetectedApp &&
           app !== 'unknown'
         ) {
           setLastDetectedApp(app);
 
+          // Get the app name from the tracked apps or fallback to getAppName
+          const appName = getAppNameFromTrackedApps(app, config.trackedApps) || getAppName(app);
+
           await supabase.from('events').insert({
             user_id: config.userId,
             group_id: config.groupId,
-            app_name: getAppName(app),
+            app_name: appName,
             app_identifier: app,
           });
         }
@@ -86,4 +96,9 @@ function getAppName(identifier: string): string {
   };
 
   return appNames[identifier] || identifier;
+}
+
+function getAppNameFromTrackedApps(identifier: string, trackedApps: TrackedAppInfo[]): string | null {
+  const trackedApp = trackedApps.find(app => app.app_identifier === identifier);
+  return trackedApp?.app_name || null;
 }

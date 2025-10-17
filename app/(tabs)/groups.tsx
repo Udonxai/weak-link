@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Modal, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Modal, ActivityIndicator, Platform, Alert } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { Plus, Users, Copy, Check } from 'lucide-react-native';
+import { Plus, Users, Copy, Check, ArrowLeft, ArrowRight } from 'lucide-react-native';
+import AppSelector from '@/components/AppSelector';
+import { requestPermission as requestScreenTimePermission, checkPermission as checkScreenTimePermission } from '@/modules/UsageStats';
 
 interface Group {
   id: string;
@@ -22,6 +24,11 @@ export default function GroupsScreen() {
   const [error, setError] = useState('');
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  
+  // App selection state
+  const [createStep, setCreateStep] = useState<'name' | 'apps'>('name');
+  const [selectedApps, setSelectedApps] = useState<string[]>([]);
+  const [selectedAppNames, setSelectedAppNames] = useState<string[]>([]);
 
   useEffect(() => {
     if (user) {
@@ -97,23 +104,45 @@ export default function GroupsScreen() {
 
       console.log('Group created successfully:', data);
     
-    // Add creator as a member of the new group
-    const { error: memberInsertError } = await supabase
-      .from('group_members')
-      .insert({
-        user_id: user.id,
-        group_id: data.id,
-      });
-    
-    if (memberInsertError) {
-      console.error('Failed to add creator to group_members:', memberInsertError);
-      setError(memberInsertError.message);
-      setCreating(false);
-      return;
-    }
+      // Add creator as a member of the new group
+      const { error: memberInsertError } = await supabase
+        .from('group_members')
+        .insert({
+          user_id: user.id,
+          group_id: data.id,
+        });
+      
+      if (memberInsertError) {
+        console.error('Failed to add creator to group_members:', memberInsertError);
+        setError(memberInsertError.message);
+        setCreating(false);
+        return;
+      }
+
+      // Insert tracked apps if any are selected
+      if (selectedApps.length > 0) {
+        const trackedAppsData = selectedApps.map((appIdentifier, index) => ({
+          group_id: data.id,
+          app_identifier: appIdentifier,
+          app_name: selectedAppNames[index] || appIdentifier,
+          platform: Platform.OS === 'ios' ? 'ios' : 'android',
+        }));
+
+        const { error: appsInsertError } = await supabase
+          .from('tracked_apps')
+          .insert(trackedAppsData);
+
+        if (appsInsertError) {
+          console.error('Failed to insert tracked apps:', appsInsertError);
+          // Don't fail the group creation if app insertion fails
+        }
+      }
       
       // Clear form and close modal
       setNewGroupName('');
+      setSelectedApps([]);
+      setSelectedAppNames([]);
+      setCreateStep('name');
       setShowCreateModal(false);
       setCreating(false);
       
@@ -225,37 +254,109 @@ export default function GroupsScreen() {
 
       <Modal visible={showCreateModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Create Group</Text>
-            {error ? <Text style={styles.error}>{error}</Text> : null}
-            <TextInput
-              style={styles.input}
-              placeholder="Group name"
-              placeholderTextColor="#999"
-              value={newGroupName}
-              onChangeText={setNewGroupName}
-              editable={!creating}
-            />
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={styles.cancelButton}
-                onPress={() => {
-                  setShowCreateModal(false);
-                  setNewGroupName('');
-                  setError('');
-                }}
-                disabled={creating}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.createButton, creating && styles.buttonDisabled]}
-                onPress={createGroup}
-                disabled={creating}
-              >
-                <Text style={styles.createButtonText}>{creating ? 'Creating...' : 'Create'}</Text>
-              </TouchableOpacity>
+          <View style={[styles.modalContent, createStep === 'apps' && styles.fullScreenModal]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {createStep === 'name' ? 'Create Group' : 'Select Apps to Track'}
+              </Text>
+              {createStep === 'apps' && (
+                <TouchableOpacity
+                  style={styles.backButton}
+                  onPress={() => setCreateStep('name')}
+                  disabled={creating}
+                >
+                  <ArrowLeft size={20} color="#007AFF" />
+                </TouchableOpacity>
+              )}
             </View>
+            
+            {error ? <Text style={styles.error}>{error}</Text> : null}
+            
+            {createStep === 'name' ? (
+              <>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Group name"
+                  placeholderTextColor="#999"
+                  value={newGroupName}
+                  onChangeText={setNewGroupName}
+                  editable={!creating}
+                />
+                <View style={styles.modalButtons}>
+                  <TouchableOpacity
+                    style={styles.cancelButton}
+                    onPress={() => {
+                      setShowCreateModal(false);
+                      setNewGroupName('');
+                      setError('');
+                      setCreateStep('name');
+                      setSelectedApps([]);
+                      setSelectedAppNames([]);
+                    }}
+                    disabled={creating}
+                  >
+                    <Text style={styles.cancelButtonText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.createButton, creating && styles.buttonDisabled]}
+                    onPress={async () => {
+                      if (Platform.OS === 'ios') {
+                        try {
+                          const hasPermission = await checkScreenTimePermission();
+                          if (!hasPermission) {
+                            const granted = await requestScreenTimePermission();
+                            if (!granted) {
+                              Alert.alert('Permission Required', 'Screen Time permission is needed to select apps on iOS.');
+                              return;
+                            }
+                          }
+                        } catch (e) {
+                          // Non-fatal; allow proceeding for selection UI
+                        }
+                      }
+                      setCreateStep('apps');
+                    }}
+                    disabled={creating || !newGroupName.trim()}
+                  >
+                    <Text style={styles.createButtonText}>Next</Text>
+                    <ArrowRight size={16} color="#fff" style={{ marginLeft: 8 }} />
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : (
+              <>
+                <View style={styles.appSelectorContainer}>
+                  <AppSelector
+                    selectedApps={selectedApps}
+                    onAppsChange={setSelectedApps}
+                    onAppNamesChange={setSelectedAppNames}
+                  />
+                </View>
+                <View style={styles.modalButtons}>
+                  <TouchableOpacity
+                    style={styles.cancelButton}
+                    onPress={() => {
+                      setShowCreateModal(false);
+                      setNewGroupName('');
+                      setError('');
+                      setCreateStep('name');
+                      setSelectedApps([]);
+                      setSelectedAppNames([]);
+                    }}
+                    disabled={creating}
+                  >
+                    <Text style={styles.cancelButtonText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.createButton, creating && styles.buttonDisabled]}
+                    onPress={createGroup}
+                    disabled={creating}
+                  >
+                    <Text style={styles.createButtonText}>{creating ? 'Creating...' : 'Create Group'}</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
           </View>
         </View>
       </Modal>
@@ -402,11 +503,29 @@ const styles = StyleSheet.create({
     padding: 24,
     borderWidth: 1,
     borderColor: '#333',
+    maxHeight: '80%',
+  },
+  fullScreenModal: {
+    maxHeight: '90%',
+    height: '90%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
   },
   modalTitle: {
     fontSize: 24,
     fontWeight: '700',
     color: '#fff',
+    flex: 1,
+  },
+  backButton: {
+    padding: 8,
+  },
+  appSelectorContainer: {
+    flex: 1,
     marginBottom: 16,
   },
   input: {

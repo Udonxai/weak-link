@@ -3,6 +3,8 @@ package com.weaklink;
 import android.app.usage.UsageStats;
 import android.app.usage.UsageStatsManager;
 import android.content.Context;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageManager;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -11,6 +13,9 @@ import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
+import com.facebook.react.bridge.WritableArray;
+import com.facebook.react.bridge.WritableMap;
+import com.facebook.react.bridge.Arguments;
 
 import java.util.List;
 import java.util.SortedMap;
@@ -83,6 +88,31 @@ public class UsageStatsModule extends ReactContextBaseJavaModule {
             promise.resolve(hasPermission);
         } catch (Exception e) {
             promise.resolve(false);
+        }
+    }
+
+    @ReactMethod
+    public void getInstalledApps(Promise promise) {
+        try {
+            PackageManager packageManager = reactContext.getPackageManager();
+            List<ApplicationInfo> installedApps = packageManager.getInstalledApplications(PackageManager.GET_META_DATA);
+            
+            WritableArray appList = Arguments.createArray();
+            
+            for (ApplicationInfo appInfo : installedApps) {
+                // Only include user-installed apps (not system apps)
+                if ((appInfo.flags & ApplicationInfo.FLAG_SYSTEM) == 0) {
+                    WritableMap app = Arguments.createMap();
+                    app.putString("packageName", appInfo.packageName);
+                    app.putString("appName", packageManager.getApplicationLabel(appInfo).toString());
+                    appList.pushMap(app);
+                }
+            }
+            
+            promise.resolve(appList);
+        } catch (Exception e) {
+            Log.e(TAG, "Error getting installed apps", e);
+            promise.reject("INSTALLED_APPS_ERROR", e);
         }
     }
 }
