@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Image } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { ArrowLeft, Copy, Check, Users, Target } from 'lucide-react-native';
+import { ArrowLeft, Copy, Check, Users, Target, Trash2 } from 'lucide-react-native';
 
 interface LeaderboardEntry {
   user_id: number;
@@ -64,7 +64,7 @@ export default function GroupDetailScreen() {
         name: data.name,
         invite_code: data.invite_code,
         created_by: data.created_by,
-        creator_name: data.users?.profile_name || 'Unknown',
+        creator_name: (data.users as any)?.profile_name || 'Unknown',
         memberCount: count || 0,
       });
     } catch (error) {
@@ -78,6 +78,45 @@ export default function GroupDetailScreen() {
     if (group) {
       setCopiedCode(true);
       setTimeout(() => setCopiedCode(false), 2000);
+    }
+  };
+
+  const deleteGroup = async () => {
+    if (!group || !user) return;
+
+    // Show confirmation alert
+    const confirmed = await new Promise((resolve) => {
+      Alert.alert(
+        'Delete Group',
+        `Are you sure you want to delete "${group.name}"? This action cannot be undone.`,
+        [
+          { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+          { text: 'Delete', style: 'destructive', onPress: () => resolve(true) },
+        ]
+      );
+    });
+
+    if (!confirmed) return;
+
+    try {
+      // Delete group (this will cascade delete related records due to foreign key constraints)
+      const { error } = await supabase
+        .from('groups')
+        .delete()
+        .eq('id', group.id)
+        .eq('created_by', parseInt(user.id)); // Only allow creator to delete
+
+      if (error) {
+        console.error('Error deleting group:', error);
+        Alert.alert('Error', 'Failed to delete group. Please try again.');
+        return;
+      }
+
+      // Navigate back to groups list
+      router.replace('/(tabs)/groups');
+    } catch (error) {
+      console.error('Error deleting group:', error);
+      Alert.alert('Error', 'Failed to delete group. Please try again.');
     }
   };
 
@@ -105,7 +144,12 @@ export default function GroupDetailScreen() {
           <ArrowLeft size={24} color="#007AFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{group.name}</Text>
-        <View style={styles.headerSpacer} />
+        {user && parseInt(user.id) === group.created_by && (
+          <TouchableOpacity style={styles.deleteButton} onPress={deleteGroup}>
+            <Trash2 size={24} color="#ff4444" />
+          </TouchableOpacity>
+        )}
+        {(!user || parseInt(user.id) !== group.created_by) && <View style={styles.headerSpacer} />}
       </View>
 
       {/* Group Info Section */}
@@ -168,6 +212,21 @@ export default function GroupDetailScreen() {
     </View>
   );
 }
+
+// Helper function to get emoji from preset ID
+const getEmojiFromPreset = (presetId: string): string => {
+  const emojiMap: { [key: string]: string } = {
+    'person1': '👨‍💼',
+    'person2': '👩‍💼',
+    'study1': '📚',
+    'study2': '🎓',
+    'study3': '💡',
+    'study4': '✏️',
+    'study5': '📖',
+    'study6': '🧠',
+  };
+  return emojiMap[presetId] || '👤';
+};
 
 // Full leaderboard component
 function GroupLeaderboard({ groupId }: { groupId: string }) {
@@ -243,25 +302,44 @@ function GroupLeaderboard({ groupId }: { groupId: string }) {
         </View>
       ) : (
         leaderboard.map((entry, index) => (
-          <View key={`${entry.user_id}-${index}`} style={styles.leaderboardEntry}>
-            <View style={styles.leaderboardRank}>
-              <Text style={[
-                styles.rankNumber,
-                index === 0 && styles.firstPlace,
-                index === 1 && styles.secondPlace,
-                index === 2 && styles.thirdPlace,
-              ]}>
-                {index + 1}
-              </Text>
-            </View>
-            <View style={styles.leaderboardInfo}>
-              <Text style={styles.leaderboardName}>{entry.profile_name}</Text>
-              <Text style={styles.leaderboardStats}>
-                {entry.losses_count === 0 ? 'Perfect streak! 🏆' : `${entry.losses_count} loss${entry.losses_count === 1 ? '' : 'es'}`}
-              </Text>
-            </View>
-            <View style={styles.leaderboardScore}>
-              <Text style={styles.scoreText}>{entry.losses_count}</Text>
+          <View key={`${entry.user_id}-${index}`} style={styles.leaderboardRow}>
+            {/* Ranking number outside the block */}
+            <Text style={[
+              styles.rankNumber,
+              index === 0 && styles.firstPlace,
+              index === 1 && styles.secondPlace,
+              index === 2 && styles.thirdPlace,
+            ]}>
+              {index + 1}.
+            </Text>
+
+            {/* User block */}
+            <View style={styles.leaderboardEntry}>
+              {/* Profile Picture */}
+              <View style={styles.profilePictureContainer}>
+                {entry.profile_pic_url && entry.profile_pic_url.startsWith('file://') ? (
+                  <Image source={{ uri: entry.profile_pic_url }} style={styles.profilePicture} />
+                ) : (
+                  <View style={[styles.profilePicture, styles.defaultProfilePicture]}>
+                    <Text style={styles.defaultProfileEmoji}>
+                      {entry.profile_pic_url && !entry.profile_pic_url.startsWith('file://') 
+                        ? getEmojiFromPreset(entry.profile_pic_url)
+                        : '👤'
+                      }
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              <View style={styles.leaderboardInfo}>
+                <Text style={styles.leaderboardName}>{entry.profile_name}</Text>
+                <Text style={styles.leaderboardStats}>
+                  {entry.losses_count === 0 ? 'Perfect streak! 🏆' : `${entry.losses_count} loss${entry.losses_count === 1 ? '' : 'es'}`}
+                </Text>
+              </View>
+              <View style={styles.leaderboardScore}>
+                <Text style={styles.scoreText}>{entry.losses_count}</Text>
+              </View>
             </View>
           </View>
         ))
@@ -375,6 +453,9 @@ const styles = StyleSheet.create({
   headerSpacer: {
     width: 40,
   },
+  deleteButton: {
+    padding: 8,
+  },
   groupInfoSection: {
     padding: 24,
   },
@@ -467,41 +548,37 @@ const styles = StyleSheet.create({
     color: '#fff',
     marginBottom: 16,
   },
+  leaderboardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   leaderboardEntry: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#1a1a1a',
     borderRadius: 12,
     padding: 16,
-    marginBottom: 8,
     borderWidth: 1,
     borderColor: '#333',
   },
-  leaderboardRank: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#333',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
   rankNumber: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '700',
     color: '#fff',
+    width: 30,
+    textAlign: 'center',
+    marginRight: 12,
   },
   firstPlace: {
-    backgroundColor: '#FFD700',
-    color: '#000',
+    color: '#FFD700',
   },
   secondPlace: {
-    backgroundColor: '#C0C0C0',
-    color: '#000',
+    color: '#C0C0C0',
   },
   thirdPlace: {
-    backgroundColor: '#CD7F32',
-    color: '#000',
+    color: '#CD7F32',
   },
   leaderboardInfo: {
     flex: 1,
@@ -599,5 +676,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingTop: 40,
+  },
+  // Profile picture styles for leaderboard
+  profilePictureContainer: {
+    marginRight: 16,
+  },
+  profilePicture: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
+  defaultProfilePicture: {
+    backgroundColor: '#333',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  defaultProfileEmoji: {
+    fontSize: 20,
   },
 });

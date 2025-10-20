@@ -133,7 +133,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.error('Error creating account:', error);
         
         // Check if it's a unique constraint violation for profile_name
-        if (error.code === '23505' && error.message.includes('profile_name')) {
+        if (error.code === '23505' && (
+          error.message.includes('profile_name') || 
+          error.details?.includes('profile_name') ||
+          error.message.includes('duplicate key value violates unique constraint')
+        )) {
           return { error: { message: 'Profile Name already exists. Please choose a different name.' } };
         }
         
