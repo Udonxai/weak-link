@@ -281,7 +281,7 @@ export default function GroupsScreen() {
             <TouchableOpacity 
               key={group.id} 
               style={styles.groupCard}
-              onPress={() => router.push(`/(tabs)/groups/${group.id}`)}
+              onPress={() => router.push(`/groups/${group.id}`)}
             >
               <View style={styles.groupInfo}>
                 <Text style={styles.groupName}>{group.name}</Text>
