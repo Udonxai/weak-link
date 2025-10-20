@@ -3,14 +3,23 @@ import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Modal,
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Plus, Users, Copy, Check, ArrowLeft, ArrowRight } from 'lucide-react-native';
+import { router } from 'expo-router';
 import AppSelector from '@/components/AppSelector';
 import { requestPermission as requestScreenTimePermission, checkPermission as checkScreenTimePermission } from '@/modules/UsageStats';
+
+interface LeaderboardEntry {
+  user_id: number;
+  profile_name: string;
+  profile_pic_url: string | null;
+  losses_count: number;
+}
 
 interface Group {
   id: string;
   name: string;
   invite_code: string;
   memberCount: number;
+  leaderboard: LeaderboardEntry[];
 }
 
 export default function GroupsScreen() {
@@ -62,11 +71,49 @@ export default function GroupsScreen() {
             .select('*', { count: 'exact', head: true })
             .eq('group_id', gm.group_id);
 
+          // Fetch leaderboard data for this group
+          const { data: leaderboardData } = await supabase
+            .from('group_members')
+            .select(`
+              user_id,
+              users!inner (
+                id,
+                profile_name,
+                profile_pic_url
+              )
+            `)
+            .eq('group_id', gm.group_id);
+
+          // Get loss counts for each member from monthly_stats (current month)
+          const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM format
+          const leaderboardEntries = await Promise.all(
+            (leaderboardData || []).map(async (member: any) => {
+              const { data: statsData } = await supabase
+                .from('monthly_stats')
+                .select('losses_count')
+                .eq('user_id', member.user_id)
+                .eq('group_id', gm.group_id)
+                .eq('month_start', `${currentMonth}-01`)
+                .maybeSingle();
+
+              return {
+                user_id: member.user_id,
+                profile_name: member.users.profile_name,
+                profile_pic_url: member.users.profile_pic_url,
+                losses_count: statsData?.losses_count || 0,
+              };
+            })
+          );
+
+          // Sort by losses_count (ascending - least losses first)
+          leaderboardEntries.sort((a, b) => a.losses_count - b.losses_count);
+
           return {
             id: gm.groups.id,
             name: gm.groups.name,
             invite_code: gm.groups.invite_code,
             memberCount: count || 0,
+            leaderboard: leaderboardEntries,
           };
         })
       );
@@ -231,14 +278,21 @@ export default function GroupsScreen() {
           </View>
         ) : (
           groups.map((group) => (
-            <View key={group.id} style={styles.groupCard}>
+            <TouchableOpacity 
+              key={group.id} 
+              style={styles.groupCard}
+              onPress={() => router.push(`/(tabs)/groups/${group.id}`)}
+            >
               <View style={styles.groupInfo}>
                 <Text style={styles.groupName}>{group.name}</Text>
                 <Text style={styles.groupMembers}>{group.memberCount} members</Text>
               </View>
               <TouchableOpacity
                 style={styles.copyButton}
-                onPress={() => copyInviteCode(group.invite_code)}
+                onPress={(e) => {
+                  e.stopPropagation(); // Prevent navigation when copying
+                  copyInviteCode(group.invite_code);
+                }}
               >
                 {copiedCode === group.invite_code ? (
                   <Check size={20} color="#00C853" />
@@ -247,7 +301,29 @@ export default function GroupsScreen() {
                 )}
               </TouchableOpacity>
               <Text style={styles.inviteCode}>{group.invite_code}</Text>
-            </View>
+              
+              {/* Mini Leaderboard */}
+              {group.leaderboard.length > 0 && (
+                <View style={styles.leaderboardSection}>
+                  <Text style={styles.leaderboardTitle}>Top Performers</Text>
+                  <View style={styles.leaderboardList}>
+                    {group.leaderboard.slice(0, 3).map((entry, index) => (
+                      <View key={`${entry.user_id}-${index}`} style={styles.leaderboardEntry}>
+                        <View style={styles.leaderboardRank}>
+                          <Text style={styles.rankNumber}>{index + 1}</Text>
+                        </View>
+                        <View style={styles.leaderboardInfo}>
+                          <Text style={styles.leaderboardName}>{entry.profile_name}</Text>
+                          <Text style={styles.leaderboardStats}>
+                            {entry.losses_count === 0 ? 'Perfect!' : `${entry.losses_count} loss${entry.losses_count === 1 ? '' : 'es'}`}
+                          </Text>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+            </TouchableOpacity>
           ))
         )}
       </ScrollView>
@@ -573,5 +649,52 @@ const styles = StyleSheet.create({
     color: '#ff4444',
     marginBottom: 12,
     fontSize: 14,
+  },
+  leaderboardSection: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#333',
+  },
+  leaderboardTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#007AFF',
+    marginBottom: 12,
+  },
+  leaderboardList: {
+    gap: 8,
+  },
+  leaderboardEntry: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  leaderboardRank: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#333',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  rankNumber: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  leaderboardInfo: {
+    flex: 1,
+  },
+  leaderboardName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
+    marginBottom: 2,
+  },
+  leaderboardStats: {
+    fontSize: 12,
+    color: '#999',
   },
 });
