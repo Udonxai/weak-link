@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { Plus, Users, Copy, Check, ArrowLeft, ArrowRight } from 'lucide-react-native';
 import { router } from 'expo-router';
 import AppSelector from '@/components/AppSelector';
+import ProfilePicture from '@/components/ProfilePicture';
 import { requestPermission as requestScreenTimePermission, checkPermission as checkScreenTimePermission } from '@/modules/UsageStats';
 
 interface LeaderboardEntry {
@@ -311,6 +312,12 @@ export default function GroupsScreen() {
                       <View key={`${entry.user_id}-${index}`} style={styles.leaderboardEntry}>
                         <View style={styles.leaderboardRank}>
                           <Text style={styles.rankNumber}>{index + 1}</Text>
+                        </View>
+                        <View style={styles.leaderboardProfileContainer}>
+                          <ProfilePicture 
+                            profilePicUrl={entry.profile_pic_url} 
+                            size={24}
+                          />
                         </View>
                         <View style={styles.leaderboardInfo}>
                           <Text style={styles.leaderboardName}>{entry.profile_name}</Text>
@@ -677,6 +684,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#333',
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: 8,
+  },
+  leaderboardProfileContainer: {
     marginRight: 12,
   },
   rankNumber: {

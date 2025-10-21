@@ -4,6 +4,7 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { ArrowLeft, Copy, Check, Users, Target, Trash2 } from 'lucide-react-native';
+import ProfilePicture from '@/components/ProfilePicture';
 
 interface LeaderboardEntry {
   user_id: number;
@@ -213,20 +214,6 @@ export default function GroupDetailScreen() {
   );
 }
 
-// Helper function to get emoji from preset ID
-const getEmojiFromPreset = (presetId: string): string => {
-  const emojiMap: { [key: string]: string } = {
-    'person1': '👨‍💼',
-    'person2': '👩‍💼',
-    'study1': '📚',
-    'study2': '🎓',
-    'study3': '💡',
-    'study4': '✏️',
-    'study5': '📖',
-    'study6': '🧠',
-  };
-  return emojiMap[presetId] || '👤';
-};
 
 // Full leaderboard component
 function GroupLeaderboard({ groupId }: { groupId: string }) {
@@ -317,18 +304,10 @@ function GroupLeaderboard({ groupId }: { groupId: string }) {
             <View style={styles.leaderboardEntry}>
               {/* Profile Picture */}
               <View style={styles.profilePictureContainer}>
-                {entry.profile_pic_url && entry.profile_pic_url.startsWith('file://') ? (
-                  <Image source={{ uri: entry.profile_pic_url }} style={styles.profilePicture} />
-                ) : (
-                  <View style={[styles.profilePicture, styles.defaultProfilePicture]}>
-                    <Text style={styles.defaultProfileEmoji}>
-                      {entry.profile_pic_url && !entry.profile_pic_url.startsWith('file://') 
-                        ? getEmojiFromPreset(entry.profile_pic_url)
-                        : '👤'
-                      }
-                    </Text>
-                  </View>
-                )}
+                <ProfilePicture 
+                  profilePicUrl={entry.profile_pic_url} 
+                  size={40}
+                />
               </View>
 
               <View style={styles.leaderboardInfo}>

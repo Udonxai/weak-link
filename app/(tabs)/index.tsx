@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Shield, TrendingDown } from 'lucide-react-native';
+import { router } from 'expo-router';
 
 interface GroupWithMembers {
   id: string;
@@ -121,12 +122,16 @@ export default function HomeScreen() {
           </View>
         ) : (
           groups.map((group) => (
-            <View key={group.id} style={styles.groupCard}>
+            <TouchableOpacity 
+              key={group.id} 
+              style={styles.groupCard}
+              onPress={() => router.push(`/groups/${group.id}`)}
+            >
               <View>
                 <Text style={styles.groupName}>{group.name}</Text>
                 <Text style={styles.groupMembers}>{group.memberCount} members</Text>
               </View>
-            </View>
+            </TouchableOpacity>
           ))
         )}
       </View>

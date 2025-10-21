@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Image } from 'react-native';
 import { PROFILE_PICTURE_PRESETS, ProfilePicturePreset } from '@/constants/profilePictures';
 
 interface ProfilePictureProps {
@@ -13,6 +13,25 @@ export default function ProfilePicture({
   size = 40, 
   style 
 }: ProfilePictureProps) {
+  // Check if it's an image URL (HTTP/HTTPS or file://)
+  if (profilePicUrl && (profilePicUrl.startsWith('http://') || profilePicUrl.startsWith('https://') || profilePicUrl.startsWith('file://'))) {
+    return (
+      <Image 
+        source={{ uri: profilePicUrl }} 
+        style={[
+          styles.imageContainer,
+          { 
+            width: size, 
+            height: size, 
+            borderRadius: size / 2,
+          },
+          style
+        ]}
+        resizeMode="cover"
+      />
+    );
+  }
+  
   // Find the preset by ID
   const preset = PROFILE_PICTURE_PRESETS.find(p => p.id === profilePicUrl);
   
@@ -56,6 +75,10 @@ const styles = StyleSheet.create({
   container: {
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  imageContainer: {
     borderWidth: 2,
     borderColor: 'transparent',
   },

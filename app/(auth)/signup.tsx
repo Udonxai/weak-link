@@ -14,6 +14,7 @@ export default function SignupScreen() {
   const [loading, setLoading] = useState(false);
   const { createAccount } = useAuth();
 
+
   const pickImage = async () => {
     // Request permission
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -51,18 +52,32 @@ export default function SignupScreen() {
     setLoading(true);
     setError('');
 
-    const { error } = await createAccount({
-      real_name: realName.trim() || undefined,
-      profile_name: profileName.trim(),
-      profile_pic_url: customImage || selectedPicture?.id,
-    });
+    try {
+      let profilePicUrl = selectedPicture?.id;
 
-    if (error) {
-      setError(error.message);
+      // If custom image is selected, use the local file path for now
+      if (customImage) {
+        console.log('Using local file path for custom image');
+        profilePicUrl = customImage;
+      }
+
+      const { error } = await createAccount({
+        real_name: realName.trim() || undefined,
+        profile_name: profileName.trim(),
+        profile_pic_url: profilePicUrl,
+      });
+
+      if (error) {
+        setError(error.message);
+        setLoading(false);
+      } else {
+        // After successful account creation, go to main app
+        router.replace('/(tabs)');
+      }
+    } catch (err) {
+      console.error('Error during signup:', err);
+      setError('Something went wrong. Please try again.');
       setLoading(false);
-    } else {
-      // After successful account creation, go to main app
-      router.replace('/(tabs)');
     }
   };
 
