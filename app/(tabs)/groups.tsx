@@ -61,7 +61,7 @@ export default function GroupsScreen() {
           invite_code
         )
       `)
-      .eq('user_id', user.id);
+      .eq('user_id', parseInt(user.id));
 
     if (data) {
       const groupsWithCounts = await Promise.all(
@@ -137,7 +137,7 @@ export default function GroupsScreen() {
         .from('groups')
         .insert({
           name: newGroupName,
-          created_by: user.id,
+          created_by: parseInt(user.id),
         })
         .select()
         .single();
@@ -155,7 +155,7 @@ export default function GroupsScreen() {
       const { error: memberInsertError } = await supabase
         .from('group_members')
         .insert({
-          user_id: user.id,
+          user_id: parseInt(user.id),
           group_id: data.id,
         });
       
@@ -227,7 +227,7 @@ export default function GroupsScreen() {
     const { error: joinError } = await supabase
       .from('group_members')
       .insert({
-        user_id: user.id,
+        user_id: parseInt(user.id),
         group_id: groupData.id,
       });
 

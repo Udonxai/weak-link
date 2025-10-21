@@ -46,7 +46,7 @@ export default function HomeScreen() {
           name
         )
       `)
-      .eq('user_id', user.id);
+      .eq('user_id', parseInt(user.id));
 
     if (groupsData) {
       const groupsWithCounts = await Promise.all(
@@ -72,7 +72,7 @@ export default function HomeScreen() {
       .gte('timestamp', today.toISOString());
 
     if (eventsData) {
-      const yourBreaks = eventsData.filter(e => e.user_id === user.id).length;
+      const yourBreaks = eventsData.filter(e => e.user_id === parseInt(user.id)).length;
       setStats({
         totalBreaks: eventsData.length,
         yourBreaks,
