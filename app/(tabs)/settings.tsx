@@ -33,7 +33,7 @@ export default function SettingsScreen() {
 
   const handleSignOut = async () => {
     await signOut();
-    router.replace('/(auth)/login');
+    router.replace('/(auth)/signup');
   };
 
   return (
@@ -73,7 +73,7 @@ export default function SettingsScreen() {
             <Text style={styles.infoText}>
               To enable app tracking, you'll need to export this project and build it locally with the native modules configured.
             </Text>
-            <Text style={styles.infoText} style={{marginTop: 12}}>
+            <Text style={[styles.infoText, {marginTop: 12}]}>
               See the project documentation for Android and iOS setup instructions.
             </Text>
           </View>

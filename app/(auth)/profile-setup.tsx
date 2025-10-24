@@ -20,7 +20,7 @@ export default function ProfileSetupScreen() {
   const [selectedPicture, setSelectedPicture] = useState<ProfilePicturePreset | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { user, createProfile } = useAuth();
+  const { user, createAccount } = useAuth();
 
   const handleContinue = async () => {
     if (!profileName.trim()) {
@@ -43,16 +43,16 @@ export default function ProfileSetupScreen() {
     }, 30000); // 30 second timeout
 
     try {
-      // User should already exist from signup/login
+      // User should already exist from signup
       if (!user) {
-        setError('No user found. Please sign up or log in first.');
+        setError('No user found. Please sign up first.');
         setLoading(false);
         return;
       }
 
       // Create/update the profile
       console.log('Creating profile...');
-      const { error: profileError } = await createProfile({
+      const { error: profileError } = await createAccount({
         real_name: realName.trim() || undefined,
         profile_name: profileName.trim(),
         profile_pic_url: selectedPicture.id,

@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { Home, Users, Target, Settings } from 'lucide-react-native';
+import { Home, Users, Settings } from 'lucide-react-native';
 
 export default function TabLayout() {
   return (
@@ -27,13 +27,6 @@ export default function TabLayout() {
         options={{
           title: 'Groups',
           tabBarIcon: ({ size, color }) => <Users size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="leaderboard"
-        options={{
-          title: 'Leaderboard',
-          tabBarIcon: ({ size, color }) => <Target size={size} color={color} />,
         }}
       />
       <Tabs.Screen

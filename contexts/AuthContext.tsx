@@ -1,5 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Device from 'expo-device';
 import { supabase } from '@/lib/supabase';
 import { Database } from '@/types/database';
 
@@ -10,10 +12,8 @@ interface AuthContextType {
   user: User | null;
   userProfile: UserProfile | null;
   loading: boolean;
-  signUp: (email: string, password: string, profileName: string) => Promise<{ error: any }>;
-  signIn: (email: string, password: string) => Promise<{ error: any }>;
-  signInAnonymously: () => Promise<{ error: any }>;
-  createProfile: (profileData: {
+  isFirstTime: boolean;
+  createAccount: (profileData: {
     real_name?: string;
     profile_name: string;
     profile_pic_url?: string;
@@ -29,6 +29,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isFirstTime, setIsFirstTime] = useState<boolean>(true);
 
   // Function to fetch user profile
   const fetchUserProfile = async (userId: number) => {
@@ -46,10 +47,62 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return data;
   };
 
+  // Check if this is the user's first time opening the app and auto-sign in if account exists
   useEffect(() => {
-    // For now, we'll skip the session check since we're using integer IDs
-    setLoading(false);
-    
+    const initializeAuth = async () => {
+      try {
+        // Get device ID for this device
+        const deviceId = await getDeviceId();
+        
+        // Check if we have a stored account for this device
+        const storedUserId = await AsyncStorage.getItem(`user_${deviceId}`);
+        
+        if (storedUserId) {
+          // We have an existing account for this device, fetch and sign in
+          const userId = parseInt(storedUserId);
+          const profile = await fetchUserProfile(userId);
+          
+          if (profile) {
+            setCurrentUserId(userId);
+            setUserProfile(profile);
+            setIsFirstTime(false);
+          } else {
+            // Profile not found, treat as first time
+            setIsFirstTime(true);
+          }
+        } else {
+          // No account for this device, first time user
+          setIsFirstTime(true);
+        }
+        
+        setLoading(false);
+      } catch (error) {
+        console.error('Error initializing auth:', error);
+        setIsFirstTime(true);
+        setLoading(false);
+      }
+    };
+
+    initializeAuth();
+  }, []);
+
+  // Get or create a unique device ID
+  const getDeviceId = async (): Promise<string> => {
+    try {
+      let deviceId = await AsyncStorage.getItem('device_id');
+      if (!deviceId) {
+        // Create a unique device ID
+        deviceId = Device.osInternalBuildId || Device.modelId || `device_${Date.now()}_${Math.random()}`;
+        await AsyncStorage.setItem('device_id', deviceId!);
+      }
+      return deviceId as string;
+    } catch (error) {
+      console.error('Error getting device ID:', error);
+      return `device_${Date.now()}_${Math.random()}`;
+    }
+  };
+
+  useEffect(() => {
     // If we have a currentUserId, fetch the user profile
     if (currentUserId) {
       fetchUserProfile(currentUserId).then((profile) => {
@@ -58,138 +111,73 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [currentUserId]);
 
-  const signUp = async (email: string, password: string, profileName: string) => {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: undefined, // Disable email confirmation
-      },
-    });
-
-    if (error) return { error };
-
-    if (data.user) {
-      // Generate a random integer ID for our custom users table
-      const randomId = Math.floor(Math.random() * 1000000000);
-      
-      const { error: profileError } = await supabase
+  const createAccount = async (profileData: {
+    real_name?: string;
+    profile_name: string;
+    profile_pic_url?: string;
+  }) => {
+    try {
+      // Create user profile directly in our users table
+      // The database will auto-generate the ID using SERIAL
+      const { data, error } = await supabase
         .from('users')
         .insert({
-          id: randomId,
-          email: email,
-          password: password, // Note: In production, this should be hashed
-          profile_name: profileName,
-        });
-
-      if (profileError) return { error: profileError };
-
-      // Set the current user ID
-      setCurrentUserId(randomId);
-    }
-
-    return { error: null };
-  };
-
-  const signIn = async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (error) return { error };
-
-    if (data.user) {
-      // Look up the user in our custom users table by email
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('email', email)
+          profile_name: profileData.profile_name,
+          real_name: profileData.real_name || null,
+          profile_pic_url: profileData.profile_pic_url || null,
+        })
+        .select()
         .single();
 
-      if (userError) {
-        console.error('Error fetching user profile:', userError);
-        return { error: userError };
+      if (error) {
+        console.error('Error creating account:', error);
+        
+        // Check if it's a unique constraint violation for profile_name
+        if (error.code === '23505' && (
+          error.message.includes('profile_name') || 
+          error.details?.includes('profile_name') ||
+          error.message.includes('duplicate key value violates unique constraint')
+        )) {
+          return { error: { message: 'Profile Name already exists. Please choose a different name.' } };
+        }
+        
+        return { error };
       }
 
-      // Set the current user ID from our custom users table
-      setCurrentUserId(userData.id);
-      setUserProfile(userData);
-    }
+      // Set the current user ID and profile
+      setCurrentUserId(data.id);
+      setUserProfile(data);
 
-    return { error: null };
-  };
-
-  const signInAnonymously = async () => {
-    try {
-      // Generate a random integer ID
-      const randomId = Math.floor(Math.random() * 1000000000);
-      
-      // Create a basic user profile with required fields
-      const { error: profileError } = await supabase
-        .from('users')
-        .insert({
-          id: randomId,
-          email: `anonymous_${randomId}@weaklink.app`, // Generate anonymous email
-          password: '', // Empty password for anonymous users
-          profile_name: `User_${randomId}`, // Ensure this is always set
-          real_name: null,
-          profile_pic_url: null,
-        });
-
-      if (profileError) {
-        console.error('Error creating user profile:', profileError);
-        return { error: profileError };
-      }
-
-      // Set the current user ID
-      setCurrentUserId(randomId);
+      // Store the user ID associated with this device for future auto-sign in
+      const deviceId = await getDeviceId();
+      await AsyncStorage.setItem(`user_${deviceId}`, data.id.toString());
+      setIsFirstTime(false);
 
       return { error: null };
     } catch (err) {
-      console.error('Error in signInAnonymously:', err);
+      console.error('Error in createAccount:', err);
       return { error: { message: 'Failed to create account' } };
     }
   };
 
 
-  const createProfile = async (profileData: {
-    real_name?: string;
-    profile_name: string;
-    profile_pic_url?: string;
-  }) => {
-    // Use the current user ID
-    if (!currentUserId) {
-      return { error: { message: 'No current user found' } };
-    }
-
-    const { error } = await supabase
-      .from('users')
-      .update({
-        real_name: profileData.real_name,
-        profile_name: profileData.profile_name,
-        profile_pic_url: profileData.profile_pic_url,
-      })
-      .eq('id', currentUserId);
-
-    if (error) {
-      console.error('Error updating profile:', error);
-      return { error };
-    }
-
-    // Refresh user profile
-    const updatedProfile = await fetchUserProfile(currentUserId);
-    setUserProfile(updatedProfile);
-
-    return { error: null };
-  };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    setCurrentUserId(null);
+    setUserProfile(null);
+    setUser(null);
+    // Note: We don't clear the device-user association on sign out
+    // so the user can be automatically signed back in next time
   };
 
   // Create a mock user object when we have a currentUserId
-  const mockUser = currentUserId ? { id: currentUserId } : null;
+  const mockUser = currentUserId ? { 
+    id: currentUserId.toString(),
+    app_metadata: {},
+    user_metadata: {},
+    aud: 'authenticated',
+    created_at: new Date().toISOString()
+  } as User : null;
 
   return (
     <AuthContext.Provider
@@ -198,10 +186,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user: mockUser,
         userProfile,
         loading,
-        signUp,
-        signIn,
-        signInAnonymously,
-        createProfile,
+        isFirstTime,
+        createAccount,
         signOut,
       }}
     >

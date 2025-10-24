@@ -1,38 +1,83 @@
 import { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Image, Alert } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { router } from 'expo-router';
+import { PROFILE_PICTURE_PRESETS, ProfilePicturePreset } from '@/constants/profilePictures';
+import * as ImagePicker from 'expo-image-picker';
 
 export default function SignupScreen() {
+  const [realName, setRealName] = useState('');
   const [profileName, setProfileName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [selectedPicture, setSelectedPicture] = useState<ProfilePicturePreset | null>(null);
+  const [customImage, setCustomImage] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { signUp } = useAuth();
+  const { createAccount } = useAuth();
 
-  const handleSignup = async () => {
-    if (!profileName || !email || !password) {
-      setError('Please fill in all fields');
+
+  const pickImage = async () => {
+    // Request permission
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Sorry, we need camera roll permissions to upload a profile picture!');
       return;
     }
 
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters');
+    // Launch image picker
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+      allowsMultipleSelection: false,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      setCustomImage(result.assets[0].uri);
+      setSelectedPicture(null); // Clear preset selection
+    }
+  };
+
+  const handleSignup = async () => {
+    if (!profileName.trim()) {
+      setError('Profile name is required');
+      return;
+    }
+
+    if (!selectedPicture && !customImage) {
+      setError('Please select a profile picture');
       return;
     }
 
     setLoading(true);
     setError('');
 
-    const { error } = await signUp(email, password, profileName);
+    try {
+      let profilePicUrl = selectedPicture?.id;
 
-    if (error) {
-      setError(error.message);
+      // If custom image is selected, use the local file path for now
+      if (customImage) {
+        console.log('Using local file path for custom image');
+        profilePicUrl = customImage;
+      }
+
+      const { error } = await createAccount({
+        real_name: realName.trim() || undefined,
+        profile_name: profileName.trim(),
+        profile_pic_url: profilePicUrl,
+      });
+
+      if (error) {
+        setError(error.message);
+        setLoading(false);
+      } else {
+        // After successful account creation, go to main app
+        router.replace('/(tabs)');
+      }
+    } catch (err) {
+      console.error('Error during signup:', err);
+      setError('Something went wrong. Please try again.');
       setLoading(false);
-    } else {
-      // After successful signup, go to profile setup to complete profile
-      router.replace('/(auth)/profile-setup');
     }
   };
 
@@ -41,67 +86,107 @@ export default function SignupScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <View style={styles.content}>
-        <Text style={styles.title}>Create Account</Text>
-        <Text style={styles.subtitle}>Join the accountability challenge</Text>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        <View style={styles.content}>
+          <Text style={styles.title}>Create Account</Text>
+          <Text style={styles.subtitle}>Join the accountability challenge</Text>
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+          {error ? <Text style={styles.error}>{error}</Text> : null}
 
-        <TextInput
-          style={styles.input}
-          placeholder="Display Name"
-          placeholderTextColor="#999"
-          value={profileName}
-          onChangeText={setProfileName}
-          autoCapitalize="none"
-          editable={!loading}
-        />
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Real Name (Optional)</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Your real name"
+              placeholderTextColor="#999"
+              value={realName}
+              onChangeText={setRealName}
+              autoCapitalize="words"
+              editable={!loading}
+            />
+            <Text style={styles.helperText}>
+              This can be used for groups that require real names
+            </Text>
+          </View>
 
-        <TextInput
-          style={styles.input}
-          placeholder="Email"
-          placeholderTextColor="#999"
-          value={email}
-          onChangeText={setEmail}
-          autoCapitalize="none"
-          keyboardType="email-address"
-          editable={!loading}
-        />
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Profile Name *</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="How others will see you"
+              placeholderTextColor="#999"
+              value={profileName}
+              onChangeText={setProfileName}
+              autoCapitalize="none"
+              editable={!loading}
+            />
+            <Text style={styles.helperText}>
+              This is how you'll appear to friends
+            </Text>
+          </View>
 
-        <TextInput
-          style={styles.input}
-          placeholder="Password"
-          placeholderTextColor="#999"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          editable={!loading}
-        />
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Profile Picture *</Text>
+            
+            <View style={styles.pictureGrid}>
+              {/* Custom Image Upload - First position */}
+              <TouchableOpacity
+                style={[styles.pictureOption, customImage && styles.pictureOptionSelected]}
+                onPress={pickImage}
+                disabled={loading}
+              >
+                <View style={[styles.pictureCircle, { backgroundColor: '#fff' }]}>
+                  {customImage ? (
+                    <View style={styles.imagePreviewContainer}>
+                      <Image source={{ uri: customImage }} style={styles.customImagePreview} />
+                      <View style={styles.circularOverlay} />
+                    </View>
+                  ) : (
+                    <View style={styles.uploadContent}>
+                      <Text style={styles.uploadIcon}>+</Text>
+                      <Text style={styles.uploadText}>upload</Text>
+                    </View>
+                  )}
+                </View>
+              </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.button, loading && styles.buttonDisabled]}
-          onPress={handleSignup}
-          disabled={loading}
-        >
-          <Text style={styles.buttonText}>{loading ? 'Creating account...' : 'Sign Up'}</Text>
-        </TouchableOpacity>
+              {/* Preset Emojis */}
+              {PROFILE_PICTURE_PRESETS.map((preset) => (
+                <TouchableOpacity
+                  key={preset.id}
+                  style={[
+                    styles.pictureOption,
+                    selectedPicture?.id === preset.id && styles.pictureOptionSelected,
+                  ]}
+                  onPress={() => {
+                    setSelectedPicture(preset);
+                    setCustomImage(null); // Clear custom image
+                  }}
+                  disabled={loading}
+                >
+                  <View
+                    style={[
+                      styles.pictureCircle,
+                      { backgroundColor: preset.color },
+                    ]}
+                  >
+                    <Text style={styles.pictureEmoji}>{preset.emoji}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
 
-        <TouchableOpacity
-          onPress={() => router.push('/(auth)/login')}
-          disabled={loading}
-          style={styles.loginButton}
-        >
-          <Text style={styles.loginText}>Already have an account? Log in</Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.button, loading && styles.buttonDisabled]}
+            onPress={handleSignup}
+            disabled={loading}
+          >
+            <Text style={styles.buttonText}>{loading ? 'Creating account...' : 'Sign Up'}</Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          onPress={() => router.push('/(auth)/welcome')}
-          disabled={loading}
-          style={styles.backButton}
-        >
-          <Text style={styles.backText}>Back to welcome</Text>
-        </TouchableOpacity>
-      </View>
+        </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
@@ -111,10 +196,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000',
   },
+  scrollContent: {
+    flexGrow: 1,
+  },
   content: {
     flex: 1,
-    justifyContent: 'center',
     padding: 24,
+    justifyContent: 'center',
   },
   title: {
     fontSize: 36,
@@ -129,22 +217,61 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 48,
   },
+  inputGroup: {
+    marginBottom: 24,
+  },
+  label: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+    marginBottom: 8,
+  },
   input: {
     backgroundColor: '#1a1a1a',
     borderRadius: 12,
     padding: 16,
     fontSize: 16,
     color: '#fff',
-    marginBottom: 16,
     borderWidth: 1,
     borderColor: '#333',
+  },
+  helperText: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
+  },
+  pictureGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginTop: 8,
+  },
+  pictureOption: {
+    width: '22%',
+    aspectRatio: 1,
+    marginBottom: 12,
+  },
+  pictureOptionSelected: {
+    transform: [{ scale: 1.1 }],
+  },
+  pictureCircle: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  pictureEmoji: {
+    fontSize: 30,
   },
   button: {
     backgroundColor: '#007AFF',
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 24,
   },
   buttonDisabled: {
     opacity: 0.5,
@@ -154,26 +281,45 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  loginButton: {
-    alignItems: 'center',
-    marginTop: 24,
-  },
-  loginText: {
-    color: '#007AFF',
-    fontSize: 16,
-  },
-  backButton: {
-    alignItems: 'center',
-    marginTop: 16,
-  },
-  backText: {
-    color: '#666',
-    fontSize: 14,
-  },
   error: {
     color: '#ff4444',
     textAlign: 'center',
     marginBottom: 16,
     fontSize: 14,
+  },
+  uploadContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  uploadIcon: {
+    fontSize: 20,
+    marginBottom: 2,
+  },
+  uploadText: {
+    fontSize: 8,
+    color: '#000',
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  imagePreviewContainer: {
+    position: 'relative',
+    width: '100%',
+    height: '100%',
+  },
+  customImagePreview: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 50,
+  },
+  circularOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: '100%',
+    height: '100%',
+    borderRadius: 50,
+    borderWidth: 2,
+    borderColor: '#007AFF',
+    backgroundColor: 'transparent',
   },
 });

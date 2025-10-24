@@ -4,24 +4,19 @@ import { useAuth } from '@/contexts/AuthContext';
 import { router } from 'expo-router';
 
 export default function IndexScreen() {
-  const { user, userProfile, loading } = useAuth();
+  const { user, userProfile, loading, isFirstTime } = useAuth();
 
   useEffect(() => {
     if (!loading) {
-      if (user) {
-        // Check if user has completed profile setup
-        if (userProfile && userProfile.profile_name && userProfile.profile_pic_url) {
-          router.replace('/(tabs)');
-        } else {
-          // User exists but hasn't completed profile setup
-          router.replace('/(auth)/profile-setup');
-        }
+      if (isFirstTime) {
+        // First time user - go directly to signup
+        router.replace('/(auth)/signup');
       } else {
-        // No user, show welcome screen to let them choose how to proceed
-        router.replace('/(auth)/welcome');
+        // Returning user - go to main app (auto-signed in)
+        router.replace('/(tabs)');
       }
     }
-  }, [loading, user, userProfile]);
+  }, [loading, user, userProfile, isFirstTime]);
 
   return (
     <View style={styles.container}>
