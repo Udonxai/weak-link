@@ -54,17 +54,20 @@ export default function SignupScreen() {
 
     try {
       let profilePicUrl = selectedPicture?.id;
+      let customImageUri = undefined;
 
-      // If custom image is selected, use the local file path for now
+      // If custom image is selected, pass it to createAccount for upload
       if (customImage) {
-        console.log('Using local file path for custom image');
-        profilePicUrl = customImage;
+        console.log('Using custom image upload');
+        customImageUri = customImage;
+        profilePicUrl = undefined; // Don't use preset when custom image is selected
       }
 
       const { error } = await createAccount({
         real_name: realName.trim() || undefined,
         profile_name: profileName.trim(),
         profile_pic_url: profilePicUrl,
+        custom_image_uri: customImageUri,
       });
 
       if (error) {

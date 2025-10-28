@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Device from 'expo-device';
 import { supabase } from '@/lib/supabase';
 import { Database } from '@/types/database';
+import { uploadProfilePicture, uploadProfilePictureFormData } from '@/lib/storage';
 
 type UserProfile = Database['public']['Tables']['users']['Row'];
 
@@ -17,6 +18,7 @@ interface AuthContextType {
     real_name?: string;
     profile_name: string;
     profile_pic_url?: string;
+    custom_image_uri?: string;
   }) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
 }
@@ -115,45 +117,111 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     real_name?: string;
     profile_name: string;
     profile_pic_url?: string;
+    custom_image_uri?: string;
   }) => {
     try {
-      // Create user profile directly in our users table
-      // The database will auto-generate the ID using SERIAL
-      const { data, error } = await supabase
-        .from('users')
-        .insert({
-          profile_name: profileData.profile_name,
-          real_name: profileData.real_name || null,
-          profile_pic_url: profileData.profile_pic_url || null,
-        })
-        .select()
-        .single();
+      let finalProfilePicUrl = profileData.profile_pic_url;
 
-      if (error) {
-        console.error('Error creating account:', error);
-        
-        // Check if it's a unique constraint violation for profile_name
-        if (error.code === '23505' && (
-          error.message.includes('profile_name') || 
-          error.details?.includes('profile_name') ||
-          error.message.includes('duplicate key value violates unique constraint')
-        )) {
-          return { error: { message: 'Profile Name already exists. Please choose a different name.' } };
+      // If custom image is provided, upload it to Supabase Storage first
+      if (profileData.custom_image_uri) {
+        try {
+          // Create a temporary user record to get the ID for file organization
+          // We'll update it with the final profile_pic_url after upload
+          const { data: tempUser, error: tempError } = await supabase
+            .from('users')
+            .insert({
+              profile_name: profileData.profile_name,
+              real_name: profileData.real_name || null,
+              profile_pic_url: null, // Will be updated after upload
+            })
+            .select()
+            .single();
+
+          if (tempError) {
+            console.error('Error creating temporary user:', tempError);
+            return { error: tempError };
+          }
+
+          // Upload the custom image - try primary method first, fallback to FormData
+          let publicUrl: string;
+          try {
+            publicUrl = await uploadProfilePicture(
+              profileData.custom_image_uri,
+              tempUser.id
+            );
+          } catch (error) {
+            console.log('Primary upload method failed, trying FormData approach...');
+            publicUrl = await uploadProfilePictureFormData(
+              profileData.custom_image_uri,
+              tempUser.id
+            );
+          }
+
+          // Update the user record with the public URL
+          const { data, error: updateError } = await supabase
+            .from('users')
+            .update({ profile_pic_url: publicUrl })
+            .eq('id', tempUser.id)
+            .select()
+            .single();
+
+          if (updateError) {
+            console.error('Error updating user with profile picture URL:', updateError);
+            return { error: updateError };
+          }
+
+          // Set the current user ID and profile
+          setCurrentUserId(data.id);
+          setUserProfile(data);
+
+          // Store the user ID associated with this device for future auto-sign in
+          const deviceId = await getDeviceId();
+          await AsyncStorage.setItem(`user_${deviceId}`, data.id.toString());
+          setIsFirstTime(false);
+
+          return { error: null };
+        } catch (uploadError) {
+          console.error('Error uploading custom image:', uploadError);
+          return { error: { message: 'Failed to upload profile picture. Please try again.' } };
         }
-        
-        return { error };
+      } else {
+        // No custom image, proceed with preset or no image
+        const { data, error } = await supabase
+          .from('users')
+          .insert({
+            profile_name: profileData.profile_name,
+            real_name: profileData.real_name || null,
+            profile_pic_url: profileData.profile_pic_url || null,
+          })
+          .select()
+          .single();
+
+        if (error) {
+          console.error('Error creating account:', error);
+          
+          // Check if it's a unique constraint violation for profile_name
+          if (error.code === '23505' && (
+            error.message.includes('profile_name') || 
+            error.details?.includes('profile_name') ||
+            error.message.includes('duplicate key value violates unique constraint')
+          )) {
+            return { error: { message: 'Profile Name already exists. Please choose a different name.' } };
+          }
+          
+          return { error };
+        }
+
+        // Set the current user ID and profile
+        setCurrentUserId(data.id);
+        setUserProfile(data);
+
+        // Store the user ID associated with this device for future auto-sign in
+        const deviceId = await getDeviceId();
+        await AsyncStorage.setItem(`user_${deviceId}`, data.id.toString());
+        setIsFirstTime(false);
+
+        return { error: null };
       }
-
-      // Set the current user ID and profile
-      setCurrentUserId(data.id);
-      setUserProfile(data);
-
-      // Store the user ID associated with this device for future auto-sign in
-      const deviceId = await getDeviceId();
-      await AsyncStorage.setItem(`user_${deviceId}`, data.id.toString());
-      setIsFirstTime(false);
-
-      return { error: null };
     } catch (err) {
       console.error('Error in createAccount:', err);
       return { error: { message: 'Failed to create account' } };

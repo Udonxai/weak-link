@@ -9,18 +9,44 @@ import {
   Platform,
   ScrollView,
   Alert,
+  Image,
 } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { router } from 'expo-router';
 import { PROFILE_PICTURE_PRESETS, ProfilePicturePreset } from '@/constants/profilePictures';
+import * as ImagePicker from 'expo-image-picker';
 
 export default function ProfileSetupScreen() {
   const [realName, setRealName] = useState('');
   const [profileName, setProfileName] = useState('');
   const [selectedPicture, setSelectedPicture] = useState<ProfilePicturePreset | null>(null);
+  const [customImage, setCustomImage] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { user, createAccount } = useAuth();
+
+  const pickImage = async () => {
+    // Request permission
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Sorry, we need camera roll permissions to upload a profile picture!');
+      return;
+    }
+
+    // Launch image picker
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+      allowsMultipleSelection: false,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      setCustomImage(result.assets[0].uri);
+      setSelectedPicture(null); // Clear preset selection
+    }
+  };
 
   const handleContinue = async () => {
     if (!profileName.trim()) {
@@ -28,7 +54,7 @@ export default function ProfileSetupScreen() {
       return;
     }
 
-    if (!selectedPicture) {
+    if (!selectedPicture && !customImage) {
       setError('Please select a profile picture');
       return;
     }
@@ -52,10 +78,22 @@ export default function ProfileSetupScreen() {
 
       // Create/update the profile
       console.log('Creating profile...');
+      
+      let profilePicUrl = selectedPicture?.id;
+      let customImageUri = undefined;
+
+      // If custom image is selected, pass it to createAccount for upload
+      if (customImage) {
+        console.log('Using custom image upload');
+        customImageUri = customImage;
+        profilePicUrl = undefined; // Don't use preset when custom image is selected
+      }
+
       const { error: profileError } = await createAccount({
         real_name: realName.trim() || undefined,
         profile_name: profileName.trim(),
-        profile_pic_url: selectedPicture.id,
+        profile_pic_url: profilePicUrl,
+        custom_image_uri: customImageUri,
       });
 
       if (profileError) {
@@ -128,6 +166,28 @@ export default function ProfileSetupScreen() {
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Profile Picture *</Text>
             <View style={styles.pictureGrid}>
+              {/* Custom Image Upload - First position */}
+              <TouchableOpacity
+                style={[styles.pictureOption, customImage && styles.pictureOptionSelected]}
+                onPress={pickImage}
+                disabled={loading}
+              >
+                <View style={[styles.pictureCircle, { backgroundColor: '#fff' }]}>
+                  {customImage ? (
+                    <View style={styles.imagePreviewContainer}>
+                      <Image source={{ uri: customImage }} style={styles.customImagePreview} />
+                      <View style={styles.circularOverlay} />
+                    </View>
+                  ) : (
+                    <View style={styles.uploadContent}>
+                      <Text style={styles.uploadIcon}>+</Text>
+                      <Text style={styles.uploadText}>upload</Text>
+                    </View>
+                  )}
+                </View>
+              </TouchableOpacity>
+
+              {/* Preset Emojis */}
               {PROFILE_PICTURE_PRESETS.map((preset) => (
                 <TouchableOpacity
                   key={preset.id}
@@ -135,7 +195,10 @@ export default function ProfileSetupScreen() {
                     styles.pictureOption,
                     selectedPicture?.id === preset.id && styles.pictureOptionSelected,
                   ]}
-                  onPress={() => setSelectedPicture(preset)}
+                  onPress={() => {
+                    setSelectedPicture(preset);
+                    setCustomImage(null); // Clear custom image
+                  }}
                   disabled={loading}
                 >
                   <View
@@ -224,7 +287,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   pictureOption: {
-    width: '18%',
+    width: '22%',
     aspectRatio: 1,
     marginBottom: 12,
   },
@@ -241,7 +304,42 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   pictureEmoji: {
-    fontSize: 24,
+    fontSize: 30,
+  },
+  uploadContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  uploadIcon: {
+    fontSize: 20,
+    marginBottom: 2,
+  },
+  uploadText: {
+    fontSize: 8,
+    color: '#000',
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  imagePreviewContainer: {
+    position: 'relative',
+    width: '100%',
+    height: '100%',
+  },
+  customImagePreview: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 50,
+  },
+  circularOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: '100%',
+    height: '100%',
+    borderRadius: 50,
+    borderWidth: 2,
+    borderColor: '#007AFF',
+    backgroundColor: 'transparent',
   },
   button: {
     backgroundColor: '#007AFF',
