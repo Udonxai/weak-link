@@ -1,10 +1,14 @@
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform, ScrollView } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { router } from 'expo-router';
-import { LogOut, User, Bell, Shield } from 'lucide-react-native';
+import { LogOut, Bell, Shield, X } from 'lucide-react-native';
 import { requestPermission as requestScreenTimePermission, checkPermission as checkScreenTimePermission, startMonitoring as startScreenTimeMonitoring } from '@/modules/UsageStats';
 
-export default function SettingsScreen() {
+interface SettingsScreenProps {
+  onClose: () => void;
+}
+
+export default function SettingsScreen({ onClose }: SettingsScreenProps) {
   const { user, signOut } = useAuth();
 
   const handleIOSPermissions = async () => {
@@ -32,29 +36,43 @@ export default function SettingsScreen() {
   };
 
   const handleSignOut = async () => {
-    await signOut();
-    router.replace('/(auth)/signup');
+    Alert.alert(
+      'Sign Out',
+      'Are you sure you want to sign out?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Sign Out',
+          style: 'destructive',
+          onPress: async () => {
+            await signOut();
+            onClose();
+            router.replace('/(auth)/signup');
+          },
+        },
+      ]
+    );
   };
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Settings</Text>
+        <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+          <X size={24} color="#fff" />
+        </TouchableOpacity>
       </View>
 
-      <View style={styles.content}>
+      <ScrollView style={styles.content}>
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Account</Text>
-
-          <View style={styles.settingCard}>
-            <User size={20} color="#007AFF" />
-            <Text style={styles.settingText}>Profile</Text>
-          </View>
+          <Text style={styles.sectionTitle}>Preferences</Text>
 
           <View style={styles.settingCard}>
             <Bell size={20} color="#007AFF" />
-            <Text style={styles.settingText}>Notifications</Text>
-            <Text style={styles.settingSubtext}>Coming soon</Text>
+            <View style={styles.settingInfo}>
+              <Text style={styles.settingText}>Notifications</Text>
+              <Text style={styles.settingSubtext}>Coming soon</Text>
+            </View>
           </View>
         </View>
 
@@ -85,7 +103,7 @@ export default function SettingsScreen() {
             <Text style={styles.signOutText}>Sign Out</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </ScrollView>
     </View>
   );
 }
@@ -96,6 +114,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#000',
   },
   header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     padding: 24,
     paddingTop: 60,
   },
@@ -103,6 +124,9 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontWeight: '700',
     color: '#fff',
+  },
+  closeButton: {
+    padding: 8,
   },
   content: {
     flex: 1,
@@ -136,8 +160,6 @@ const styles = StyleSheet.create({
   settingText: {
     fontSize: 16,
     color: '#fff',
-    marginLeft: 12,
-    flex: 1,
   },
   settingSubtext: {
     fontSize: 14,
@@ -173,3 +195,4 @@ const styles = StyleSheet.create({
     marginLeft: 12,
   },
 });
+
